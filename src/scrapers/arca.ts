@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { delay, fetchWithTimeout, classifyCategory, cleanKeyword, extractNumbers, nowISO } from "../utils.js";
+import { delay, fetchWithTimeout, classifyCategory, cleanKeyword, extractNumbers } from "../utils.js";
 import type { ArcaListItem, ArcaArticle } from "../types.js";
 
 const LIST_URL = "https://arca.live/b/namuhotnow";
@@ -7,6 +7,7 @@ const ARTICLE_URL_BASE = "https://arca.live/b/namuhotnow";
 
 /**
  * 아카라이브 목록 페이지를 스크래핑하여 최신 게시글 N개를 반환합니다.
+ * 각 게시글 엘리먼트 내에서만 조회수/좋아요/댓글을 추출합니다.
  */
 export async function scrapeList(count: number): Promise<ArcaListItem[]> {
   const html = await fetchPage(LIST_URL);
@@ -14,36 +15,49 @@ export async function scrapeList(count: number): Promise<ArcaListItem[]> {
 
   const $ = cheerio.load(html);
   const items: ArcaListItem[] = [];
+  const processedPostIds = new Set<number>();
 
-  // 게시글 링크 패턴: <a href="/b/namuhotnow/{숫자}"...>
-  const links = $("a").toArray();
-  const postLinks = new Map<number, string>();
+  // 아카라이브 목록 페이지의 각 게시글은 <tr> 또는 .list-item 등 특정 컨테이너에 있음
+  // 1. 먼저 모든 <a> 링크에서 게시글 ID와 제목을 수집
+  $("a").each((_, linkEl) => {
+    if (items.length >= count) return false;
 
-  for (const link of links) {
-    const href = $(link).attr("href") || "";
+    const href = $(linkEl).attr("href") || "";
     const match = href.match(/\/b\/namuhotnow\/(\d+)/);
-    if (match) {
-      const postId = parseInt(match[1], 10);
-      const title = $(link).text().trim();
-      if (title && title.length > 0 && !postLinks.has(postId)) {
-        postLinks.set(postId, title);
-      }
+    if (!match) return;
+
+    const postId = parseInt(match[1], 10);
+    if (processedPostIds.has(postId)) return;
+
+    const title = $(linkEl).text().trim();
+    if (!title || title.length === 0) return;
+
+    processedPostIds.add(postId);
+
+    // 2. 이 링크가 속한 가장 가까운 부모 컨테이너 찾기
+    // <tr>이 일반적이지만, <div>나 <li>일 수도 있음
+    const parentRow = $(linkEl).closest("tr, div.list-item, li, .table-row, [class*='row']").first();
+
+    let views = 0;
+    let likes = 0;
+    let comments = 0;
+
+    if (parentRow.length > 0) {
+      // 부모 컨테이너 내의 텍스트에서 숫자 추출
+      const rowNumbers = extractNumbers(parentRow.text());
+      // 일반적으로 조회수/좋아요/댓글 순서로 노출됨
+      views = rowNumbers[0] ?? 0;
+      likes = rowNumbers[1] ?? 0;
+      comments = rowNumbers[2] ?? 0;
+    } else {
+      // 부모를 못 찾았으면 링크 주변만 스코프로 제한
+      const parent = $(linkEl).parent();
+      const scope = parent.length > 0 ? parent : $(linkEl);
+      const numbers = extractNumbers(scope.text());
+      views = numbers[0] ?? 0;
+      likes = numbers[1] ?? 0;
+      comments = numbers[2] ?? 0;
     }
-  }
-
-  // 모든 텍스트에서 숫자 추출 (조회수, 좋아요, 댓글)
-  const pageText = $("body").text();
-  const allNumbers = extractNumbers(pageText);
-
-  let idx = 0;
-  for (const [postId, title] of postLinks) {
-    if (items.length >= count) break;
-
-    // 마지막 3개의 숫자를 조회수/좋아요/댓글로 사용
-    const numbers = allNumbers.slice(idx * 3, idx * 3 + 3);
-    const views = numbers[0] ?? 0;
-    const likes = numbers[1] ?? 0;
-    const comments = numbers[2] ?? 0;
 
     items.push({
       postId,
@@ -53,10 +67,9 @@ export async function scrapeList(count: number): Promise<ArcaListItem[]> {
       likes,
       comments,
     });
-    idx++;
-  }
+  });
 
-  return items;
+  return items.slice(0, count);
 }
 
 /**
@@ -73,13 +86,11 @@ export async function scrapeArticle(postId: number): Promise<ArcaArticle | null>
   const $ = cheerio.load(html);
 
   // 본문 영역: 게시글 내용이 포함된 주요 div 영역
-  // 모든 텍스트 노드를 수집하여 본문 구성
   let body = "";
   const articleContent = $("div.article-content, div.content, article, .content, .article").first();
   if (articleContent.length > 0) {
     body = articleContent.text().trim();
   } else {
-    // fallback: body에서 모든 텍스트 수집
     body = $("body").text().trim();
   }
 
@@ -93,13 +104,27 @@ export async function scrapeArticle(postId: number): Promise<ArcaArticle | null>
   const keyword = cleanKeyword(title);
   const category = classifyCategory(title);
 
-  // 숫자 추출
-  const numbers = extractNumbers($("body").text());
+  // 상세 페이지의 stats 영역에서 조회수/좋아요/댓글 추출
+  // 상세 페이지에서는 게시글 본문이 아닌 사이드/상단 stats 영역의 숫자가 더 관련 있음
+  const statSelectors = ".stats, .vote, .status, .info, [class*='stat'], [class*='vote'], [class*='info']";
+  let statsText = "";
+  $(statSelectors).each((_, el) => {
+    statsText += " " + $(el).text();
+  });
+
+  let numbers: number[];
+  if (statsText.trim()) {
+    numbers = extractNumbers(statsText);
+  } else {
+    // fallback: 전체 body에서 숫자 추출
+    numbers = extractNumbers($("body").text());
+  }
+
   const views = numbers[0] ?? 0;
   const likes = numbers[1] ?? 0;
   const comments = numbers[2] ?? 0;
 
-  // 작성일시 추출 (시도)
+  // 작성일시 추출
   let postedAt = "";
   const timeElements = $("time, .time, .date, .written").first();
   if (timeElements.length > 0) {
