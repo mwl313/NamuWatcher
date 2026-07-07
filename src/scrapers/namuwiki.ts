@@ -41,6 +41,14 @@ export async function scrapeWiki(keyword: string): Promise<NamuWikiResult | null
   return result;
 }
 
+function splitIntoChunks(text: string, chunkSize: number): string[] {
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
 async function tryFetchFromGoogleCache(
   keyword: string,
   originalUrl: string
@@ -114,16 +122,19 @@ function parseWikiPage(html: string, keyword: string, url: string): NamuWikiResu
       }
     });
 
-  // 첫 3개의 완성된 문장을 요약으로 추출
+  // 전체 텍스트 결합 (50000자 제한)
   const fullText = allText.join(" ");
+  const trimmedText = fullText.length > 50000 ? fullText.slice(0, 50000) : fullText;
+
+  // 첫 3개의 완성된 문장을 요약으로 추출
   const sentences = fullText.split(/(?<=[.!?])\s+/);
   const summarySentences = sentences.slice(0, 3);
   const summary = summarySentences.join(" ").trim();
 
   if (!summary || summary.length < 5) return null;
 
-  // 50000자 제한
-  const trimmedSummary = summary.length > 50000 ? summary.slice(0, 50000) : summary;
+  // 8000자씩 분할
+  const chunks = splitIntoChunks(trimmedText, 8000);
 
   // 문서 제목 추출
   let title = keyword;
@@ -137,7 +148,8 @@ function parseWikiPage(html: string, keyword: string, url: string): NamuWikiResu
 
   return {
     title,
-    summary: trimmedSummary,
+    summary,
     url,
+    chunks,
   };
 }

@@ -1,12 +1,11 @@
 import { z } from "zod";
 import { scrapeWiki } from "../scrapers/namuwiki.js";
-import type { SearchResponse } from "../types.js";
 
 export const searchSchema = {
   keyword: z.string().describe("나무위키에서 검색할 키워드"),
 };
 
-export async function searchTool(args: { keyword: string }): Promise<SearchResponse> {
+export async function searchTool(args: { keyword: string }): Promise<{ content: { type: "text"; text: string }[] }> {
   let result = await scrapeWiki(args.keyword);
 
   if (!result) {
@@ -24,16 +23,26 @@ export async function searchTool(args: { keyword: string }): Promise<SearchRespo
     throw new Error(`"${args.keyword}"에 대한 나무위키 문서를 찾을 수 없습니다.`);
   }
 
-  const response: any = {
+  const totalChunks = result.chunks.length;
+  const content: { type: "text"; text: string }[] = [];
+
+  // 첫 블록: 메타정보 JSON
+  const meta: any = {
     type: "search",
     title: result.title,
-    summary: result.summary,
     url: result.url,
+    total_chunks: totalChunks,
   };
-
   if (args.keyword !== result.title) {
-    response.note = `'${args.keyword}'를 찾을 수 없어 '${result.title}' 문서를 대신 표시합니다.`;
+    meta.note = `'${args.keyword}'를 찾을 수 없어 '${result.title}' 문서를 대신 표시합니다.`;
+  }
+  content.push({ type: "text", text: JSON.stringify(meta) });
+
+  // 그 다음: chunks 개수만큼 "[i/total] 본문" 형식으로 블록 추가
+  for (let i = 0; i < totalChunks; i++) {
+    const chunkLabel = `[${i + 1}/${totalChunks}]`;
+    content.push({ type: "text", text: `${chunkLabel}\n${result.chunks[i]}` });
   }
 
-  return response;
+  return { content };
 }

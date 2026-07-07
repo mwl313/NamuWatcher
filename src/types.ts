@@ -218,4 +218,5 @@ export interface NamuWikiResult {
   title: string;
   summary: string;
   url: string;
+  chunks: string[];
 }

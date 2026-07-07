@@ -139,6 +139,10 @@ async function handleJsonRpc(message: any): Promise<any> {
   if (method === "tools/call") {
     try {
       const data = await handleToolCall(params?.name, params?.arguments);
+      // search 도구는 자체 content 배열을 반환하므로 이중 JSON.stringify 방지
+      if (params?.name === "search" && data?.content) {
+        return { jsonrpc: "2.0", id, result: data };
+      }
       return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(data) }] } };
     } catch (error: any) {
       return {
