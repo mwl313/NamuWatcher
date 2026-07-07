@@ -12,9 +12,9 @@ Namu Watch는 AI 챗봇이 사용자의 자연어 요청에 따라 나무위키 
 
 | 기능 | 도구명 | 설명 |
 |:-----|:-------|:------|
-| 🔍 **나무위키 검색** | `search` | 나무위키 문서 검색 및 첫 문단 요약. **핵심 기능** |
-| 🔥 **실시간 검색어** | `trending` | 현재 나무위키 실검 TOP N 조회 |
-| ❓ **왜 떴는지** | `why` | 특정 키워드가 실검에 오른 이유 설명 |
+| 🔍 **나무위키 검색** | `search` | 나무위키 문서 검색 및 내용 조회 (8000자 단위 청크 분할, 멀티블록 응답). **핵심 기능** |
+| 🔥 **실시간 검색어** | `trending` | 나무위키 공식 API 기반 실검 TOP N 조회 |
+| ❓ **왜 떴는지** | `why` | 특정 키워드가 실검에 오른 이유 설명 (아카라이브 → 나무위키 fallback) |
 | 📅 **과거 이력** | `history` | 특정 날짜의 실검 순위 또는 키워드 시간별 등장 기록 |
 | 📈 **급상승 감지** | `velocity` | 최근 N시간 동안 조회수 급증 키워드 탐지 |
 | 🔗 **연관 키워드** | `related` | 특정 키워드와 함께 자주 등장하는 연관 키워드 |
@@ -27,26 +27,28 @@ Namu Watch는 AI 챗봇이 사용자의 자연어 요청에 따라 나무위키 
 
 ```
 👤 "나무위키에서 이순신에 대해 알려줘"
-→ AI가 search("이순신") 호출
+→ AI가 search("이순신") 호출 → 문서 전체를 청크 단위로 수신
 🤖 "이순신은 조선 중기의 무신으로..."
 
 👤 "ㄱㄱㅅ이 누구야?"
-→ AI가 search("ㄱㄱㅅ") 호출, 적절한 문서 탐색
+→ AI가 search("ㄱㄱㅅ") 호출 → fallback chain: "ㄱㄱㅅ" → "ㄱㄱ" → 적절한 문서 탐색
 🤖 "고구마순이라고도 불리는..."
 
 👤 "지금 실검 뭐 뜨고 있어?"
-→ AI가 trending() 호출
+→ AI가 trending() 호출 → 나무위키 공식 실검 API
 🤖 "🔥 실시간 검색어 TOP 10..."
 
 👤 "호날두 왜 실검에 떴어?"
-→ AI가 why("호날두") 호출
-🤖 "오늘 스페인과의 16강전에 선발 출전했으나 1-0으로..."
+→ AI가 why("호날두") 호출 → 아카라이브 게시글 검색 → 나무위키 fallback
+🤖 "오늘 스페인과의 16강전에 선발 출전했으나..."
 ```
 
 ## 데이터 소스
 
 - **주 소스**: [나무위키](https://namu.wiki) — AI가 사용자의 질문에 답하기 위해 문서를 검색하고 요약합니다.
-- **보조 소스**: [아카라이브 "나무위키 실검 알려주는 채널"](https://arca.live/b/namuhotnow) — 실시간 검색어 순위와 각 키워드가 뜬 이유를 제공합니다.
+  - 3단계 접속 우회: 직접 접속 → 쿠키 획득 → Google Cache
+- **실검 데이터**: [나무위키 공식 실검 API](https://search.namu.wiki/api/ranking) — 실시간 검색어 순위 제공
+- **실검 이유**: [아카라이브 "나무위키 실검 알려주는 채널"](https://arca.live/b/namuhotnow)
   - 각 게시글 = 하나의 실검 키워드 + 사람이 작성한 이유 설명
 
 ## 기술 스택
@@ -133,9 +135,9 @@ docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
 }
 ```
 
-### 응답 형식
+### 응답 형식 (search 도구)
 
-모든 도구는 아래 형식으로 응답합니다.
+search 도구는 멀티블록 응답을 반환합니다.
 
 ```json
 {
@@ -145,12 +147,24 @@ docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
     "content": [
       {
         "type": "text",
-        "text": "{\"type\":\"search\",\"title\":\"이순신\",\"summary\":\"...\"}"
+        "text": "{\"type\":\"search\",\"title\":\"이순신\",\"url\":\"...\",\"total_chunks\":5}"
+      },
+      {
+        "type": "text",
+        "text": "[1/5]\n이순신은 조선 중기의 무신으로..."
+      },
+      {
+        "type": "text",
+        "text": "[2/5]\n1592년 임진왜란이 발발하자..."
       }
     ]
   }
 }
 ```
+
+- 첫 번째 블록: 메타정보 JSON (`title`, `url`, `total_chunks`)
+- 이후 블록: `[i/total]` 라벨 + 8000자 단위 본문
+- AI는 메타정보를 읽고, 필요한 청크를 선택하여 답변을 생성합니다.
 
 ## 환경 변수
 
@@ -165,24 +179,25 @@ docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
 ```
 namu-watch/
 ├── src/
-│   ├── index.ts           # HTTP 서버 + JSON-RPC 핸들러
-│   ├── types.ts           # 공통 타입 정의
-│   ├── utils.ts           # 유틸리티 함수
+│   ├── index.ts               # HTTP 서버 + JSON-RPC 핸들러
+│   ├── types.ts               # 공통 타입 정의
+│   ├── utils.ts               # 유틸리티 함수 (fetch, delay, 카테고리 분류)
 │   ├── tools/
-│   │   ├── search.ts              # 🔍 나무위키 문서 검색 (핵심)
-│   │   ├── trending.ts            # 실검 TOP N
-│   │   ├── why.ts                 # 실검 이유 설명
-│   │   ├── history.ts             # 과거 이력
-│   │   ├── velocity.ts            # 급상승 감지
-│   │   ├── related.ts             # 연관 키워드
-│   │   ├── trending-together.ts   # 함께 뜨는 키워드
-│   │   └── trend-of-day.ts        # 종합 리포트
+│   │   ├── search.ts          # 🔍 나무위키 문서 검색 (청크 분할 + 멀티블록 응답)
+│   │   ├── trending.ts        # 🔥 나무위키 공식 API 실검 TOP N
+│   │   ├── why.ts             # ❓ 실검 이유 설명 (아카라이브 → 나무위키 fallback)
+│   │   ├── history.ts         # 📅 과거 실검 이력 조회
+│   │   ├── velocity.ts        # 📈 급상승 키워드 감지
+│   │   ├── related.ts         # 🔗 연관 키워드
+│   │   ├── trending-together.ts  # 👫 함께 뜨는 키워드
+│   │   └── trend-of-day.ts    # 📊 종합 리포트
 │   ├── scrapers/
-│   │   ├── namuwiki.ts    # 나무위키 문서 파싱
-│   │   └── arca.ts        # 아카라이브 실검채널 스크래핑
+│   │   ├── namuwiki.ts        # 📖 나무위키 문서 파싱 (3단계 우회: 직행 → 쿠키 → Google Cache)
+│   │   ├── ranking.ts         # 📊 search.namu.wiki 공식 실검 API
+│   │   └── arca.ts            # 🏛️ 아카라이브 실검채널 스크래핑 (vrow 구조)
 │   └── db/
-│       ├── schema.ts      # SQLite 초기화
-│       └── queries.ts     # DB CRUD 함수
+│       ├── schema.ts          # SQLite 초기화 (snapshots + articles)
+│       └── queries.ts         # DB CRUD 함수
 ├── Dockerfile
 ├── package.json
 └── tsconfig.json
