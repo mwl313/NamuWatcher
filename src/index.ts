@@ -15,6 +15,18 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 // Tool definitions
 const TOOLS = [
   {
+    name: "search",
+    description: `나무위키 문서의 내용을 조회합니다. 사용자가 아래와 같이 물으면 이 도구를 사용하세요:
+- '나무위키에서 [키워드] 알려줘'
+- '[키워드]가 뭐야?', '[키워드] 뜻', '[키워드] 정보'
+- '나무위키에서 [키워드] 찾아줘'
+- '[키워드]에 대해 설명해줘'
+- '나무위키 [키워드] 문서 읽어줘'
+- '[문서명]에서 [키워드]에 대해 알려줘'
+단, 실검 키워드에 대한 추가 설명을 요청할 때는 'why' 도구를 우선 사용하세요.`,
+    inputSchema: { type: "object", properties: { keyword: { type: "string", description: "나무위키에서 검색할 키워드" } }, required: ["keyword"] },
+  },
+  {
     name: "trending",
     description: "현재 나무위키 실시간 검색어 순위를 조회합니다. 사용자가 '지금 실검 뭐야?', '실시간 검색어 알려줘', '요즘 핫한 키워드', '실검 TOP 10', '오늘의 실검' 등으로 물으면 이 도구를 사용하세요. count로 개수(기본 10, 최대 20), category로 카테고리 필터(스포츠/인방/정치/일반/TV/커뮤)를 지정할 수 있습니다.",
     inputSchema: {
@@ -29,11 +41,6 @@ const TOOLS = [
     name: "why",
     description: "특정 키워드가 왜 실시간 검색어에 올랐는지 이유를 설명합니다. 사용자가 '[키워드] 왜 떴어?', '[키워드] 무슨 일?', '[키워드] 이유가 뭐야?', '왜 [키워드]가 실검이야?' 등으로 물으면 이 도구를 사용하세요.",
     inputSchema: { type: "object", properties: { keyword: { type: "string", description: "궁금한 키워드" } }, required: ["keyword"] },
-  },
-  {
-    name: "search",
-    description: "나무위키 문서의 내용을 조회합니다. 사용자가 '[키워드]가 뭐야?', '[키워드] 알려줘', '[키워드] 정보' 등으로 물으면 이 도구를 사용하세요. 단, 실검 키워드에 대한 추가 설명을 요청할 때는 'why' 도구를 우선 사용하세요.",
-    inputSchema: { type: "object", properties: { keyword: { type: "string", description: "나무위키에서 검색할 키워드" } }, required: ["keyword"] },
   },
   {
     name: "history",
