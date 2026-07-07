@@ -51,8 +51,8 @@ function parseWikiPage(html: string, keyword: string, url: string): NamuWikiResu
 
   if (!summary || summary.length < 5) return null;
 
-  // 2000자 제한
-  const trimmedSummary = summary.length > 2000 ? summary.slice(0, 2000) : summary;
+  // 50000자 제한
+  const trimmedSummary = summary.length > 50000 ? summary.slice(0, 50000) : summary;
 
   // 문서 제목 추출
   let title = keyword;
