@@ -1,13 +1,15 @@
 import * as cheerio from "cheerio";
-import { delay, fetchWithTimeout } from "../utils.js";
+import { delay, fetchWithTimeout, fetchWithCookie } from "../utils.js";
 import type { NamuWikiResult } from "../types.js";
 
 const WIKI_URL_BASE = "https://namu.wiki/w";
+const WIKI_HOME = "https://namu.wiki/";
 
 /**
  * 나무위키 문서를 검색하여 첫 문단 요약을 추출합니다.
  * Vue.js SPA이므로 HTML 소스에서 모든 텍스트 노드를 수집합니다.
  * 요청 간격: 최소 300ms
+ * IP 차단 시 쿠키 획득 후 재시도합니다.
  */
 export async function scrapeWiki(keyword: string): Promise<NamuWikiResult | null> {
   await delay(300);
@@ -15,15 +17,58 @@ export async function scrapeWiki(keyword: string): Promise<NamuWikiResult | null
   const encodedKeyword = encodeURIComponent(keyword);
   const url = `${WIKI_URL_BASE}/${encodedKeyword}`;
 
-  try {
-    const response = await fetchWithTimeout(url, 15_000);
-    if (!response.ok) return null;
+  // 1차 시도
+  let result = await tryFetchWiki(url, keyword);
+  if (result) return result;
 
-    const html = await response.text();
-    return parseWikiPage(html, keyword, url);
-  } catch {
-    return null;
+  // 2차 시도: 쿠키 획득 후 재시도
+  await delay(500);
+  const { cookie } = await fetchWithCookie(WIKI_HOME);
+  if (!cookie) return null;
+
+  await delay(300);
+  result = await tryFetchWiki(url, keyword, cookie);
+  return result;
+}
+
+async function tryFetchWiki(
+  url: string,
+  keyword: string,
+  cookie?: string
+): Promise<NamuWikiResult | null> {
+  let html: string | null = null;
+
+  if (cookie) {
+    const { response } = await fetchWithCookie(url, 15_000, cookie);
+    if (!response || !response.ok) return null;
+    html = await response.text();
+  } else {
+    try {
+      const response = await fetchWithTimeout(url, 15_000);
+      if (!response.ok) return null;
+      html = await response.text();
+    } catch {
+      return null;
+    }
   }
+
+  if (!html) return null;
+
+  // IP 차단 감지
+  if (isBlocked(html)) return null;
+
+  return parseWikiPage(html, keyword, url);
+}
+
+function isBlocked(html: string): boolean {
+  const checkText = html.toLowerCase();
+  return (
+    checkText.includes("idc 대역 ip") ||
+    checkText.includes("ip 우회 수단") ||
+    checkText.includes("차단되었습니다") ||
+    checkText.includes("blocked") ||
+    checkText.includes("rate limit")
+  );
 }
 
 function parseWikiPage(html: string, keyword: string, url: string): NamuWikiResult | null {
@@ -58,7 +103,6 @@ function parseWikiPage(html: string, keyword: string, url: string): NamuWikiResu
   let title = keyword;
   const titleElement = $("title").first().text().trim();
   if (titleElement) {
-    // 나무위키 타이틀은 "제목 - 나무위키" 형식
     const titleMatch = titleElement.match(/^(.+?)\s*-\s*나무위키/);
     if (titleMatch) {
       title = titleMatch[1].trim();
