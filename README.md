@@ -1,10 +1,10 @@
 # Namu Watch 🔍
 
-**나무위키 실시간 검색어 모니터링 MCP 서버**
+**카카오톡 AI 비서로 나무위키를 읽다**
 
-실시간 검색어 TOP 20 확인, 키워드별 이유 설명, 과거 이력 조회, 급상승 키워드 감지까지 — 카카오톡 AI 비서를 위한 완벽한 실검 도우미 MCP 서버입니다.
+Namu Watch는 AI 챗봇(Kakao Tools 등)이 나무위키 문서를 자연어로 검색하고 읽을 수 있게 해주는 MCP 서버입니다.
 
-**대회**: AGENTIC PLAYER 10 (카카오 PlayMCP)
+"**나무위키에서 이순신 알려줘**" — 이 한마디로 AI가 나무위키 문서를 찾아 요약해줍니다. 실시간 검색어 트렌드와 각 키워드가 왜 뜨는지도 함께 확인할 수 있습니다.
 
 ---
 
@@ -12,23 +12,42 @@
 
 | 기능 | 도구명 | 설명 |
 |:-----|:-------|:------|
-| 🔥 실시간 검색어 | `trending` | 현재 나무위키 실검 TOP N 조회 (카테고리 필터 가능) |
-| ❓ 왜 떴는지 | `why` | 특정 키워드가 실검에 오른 이유 설명 (DB 캐시 → 아카라이브 → 나무위키 fallback) |
-| 📖 문서 검색 | `search` | 나무위키 문서 내용 조회 (키워드 설명, 정보, 뜻) |
-| 📅 과거 이력 | `history` | 특정 날짜의 실검 순위 또는 키워드 시간별 등장 기록 |
-| 📈 급상승 감지 | `velocity` | 최근 N시간 동안 조회수 급증 키워드 탐지 |
-| 🔗 연관 키워드 | `related` | 특정 키워드와 함께 자주 등장하는 연관 키워드 |
-| 👫 함께 트렌딩 | `trending_together` | 동시간대 함께 등장하는 키워드 쌍 분석 |
-| 📊 오늘의 리포트 | `trend_of_day` | 오늘의 실검 종합 리포트 (카테고리 분포, TOP 키워드, 급상승 키워드) |
+| 🔍 **나무위키 검색** | `search` | 나무위키 문서 검색 및 첫 문단 요약. **핵심 기능** |
+| 🔥 **실시간 검색어** | `trending` | 현재 나무위키 실검 TOP N 조회 |
+| ❓ **왜 떴는지** | `why` | 특정 키워드가 실검에 오른 이유 설명 |
+| 📅 **과거 이력** | `history` | 특정 날짜의 실검 순위 또는 키워드 시간별 등장 기록 |
+| 📈 **급상승 감지** | `velocity` | 최근 N시간 동안 조회수 급증 키워드 탐지 |
+| 🔗 **연관 키워드** | `related` | 특정 키워드와 함께 자주 등장하는 연관 키워드 |
+| 👫 **함께 트렌딩** | `trending_together` | 동시간대 함께 등장하는 키워드 쌍 분석 |
+| 📊 **오늘의 리포트** | `trend_of_day` | 오늘의 실검 종합 리포트 |
+
+## 사용 예시
+
+사용자는 카카오톡 채팅에서 자연어로 질문하면 됩니다. 모든 명령어는 AI가 자동으로 인식합니다.
+
+```
+👤 "나무위키에서 이순신에 대해 알려줘"
+→ AI가 search("이순신") 호출
+🤖 "이순신은 조선 중기의 무신으로..."
+
+👤 "ㄱㄱㅅ이 누구야?"
+→ AI가 search("ㄱㄱㅅ") 호출, 적절한 문서 탐색
+🤖 "고구마순이라고도 불리는..."
+
+👤 "지금 실검 뭐 뜨고 있어?"
+→ AI가 trending() 호출
+🤖 "🔥 실시간 검색어 TOP 10..."
+
+👤 "호날두 왜 실검에 떴어?"
+→ AI가 why("호날두") 호출
+🤖 "오늘 스페인과의 16강전에 선발 출전했으나 1-0으로..."
+```
 
 ## 데이터 소스
 
-- **주 소스**: [아카라이브 "나무위키 실검 알려주는 채널"](https://arca.live/b/namuhotnow)
+- **주 소스**: [나무위키](https://namu.wiki) — AI가 사용자의 질문에 답하기 위해 문서를 검색하고 요약합니다.
+- **보조 소스**: [아카라이브 "나무위키 실검 알려주는 채널"](https://arca.live/b/namuhotnow) — 실시간 검색어 순위와 각 키워드가 뜬 이유를 제공합니다.
   - 각 게시글 = 하나의 실검 키워드 + 사람이 작성한 이유 설명
-  - 카테고리(스포츠/인방/정치/일반/TV/커뮤), 조회수, 좋아요, 댓글 수 포함
-  - 게시글 링크 패턴: `<a href="/b/namuhotnow/{숫자}"...>`
-- **보조 소스**: [나무위키](https://namu.wiki) — 아카라이브에 없는 키워드 검색 시 fallback
-  - Vue.js SPA → HTML 소스에서 모든 텍스트 노드 수집, 첫 3문장 요약
 
 ## 기술 스택
 
@@ -67,7 +86,6 @@ node dist/index.js
 
 ```bash
 docker build --platform linux/amd64 -t namu-watch .
-
 docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
 ```
 
@@ -97,31 +115,27 @@ docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
 }
 ```
 
-**도구 목록 조회:**
+**도구 조회:**
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/list"
-}
+{ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }
 ```
 
-**도구 호출:**
+**도구 호출 (예: search):**
 ```json
 {
   "jsonrpc": "2.0",
   "id": 3,
   "method": "tools/call",
   "params": {
-    "name": "trending",
-    "arguments": { "count": 10 }
+    "name": "search",
+    "arguments": { "keyword": "이순신" }
   }
 }
 ```
 
 ### 응답 형식
 
-모든 도구는 아래 형식으로 응답합니다. `content[0].text` 필드 안에 JSON 문자열을 넣어 구조화된 데이터를 전달합니다.
+모든 도구는 아래 형식으로 응답합니다.
 
 ```json
 {
@@ -131,21 +145,9 @@ docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
     "content": [
       {
         "type": "text",
-        "text": "{\"type\":\"trending\",\"captured_at\":\"2026-07-07T19:00:00\",\"keywords\":[...]}"
+        "text": "{\"type\":\"search\",\"title\":\"이순신\",\"summary\":\"...\"}"
       }
     ]
-  }
-}
-```
-
-에러 응답:
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "error": {
-    "code": -32603,
-    "message": "\"키워드\"에 대한 정보를 찾을 수 없습니다."
   }
 }
 ```
@@ -163,84 +165,28 @@ docker run --platform linux/amd64 -p 3000:3000 -v namu-data:/app/data namu-watch
 ```
 namu-watch/
 ├── src/
-│   ├── index.ts           # HTTP 서버 (POST /mcp, GET /healthz, CORS, JSON-RPC 핸들러)
-│   ├── types.ts           # 공통 타입 정의 (응답/DB/스크래퍼)
-│   ├── utils.ts           # 유틸리티 함수 (delay, fetch, 카테고리 분류, 텍스트 정제)
+│   ├── index.ts           # HTTP 서버 + JSON-RPC 핸들러
+│   ├── types.ts           # 공통 타입 정의
+│   ├── utils.ts           # 유틸리티 함수
 │   ├── tools/
-│   │   ├── trending.ts          # 현재 실검 TOP N + DB 자동 저장
-│   │   ├── why.ts               # 키워드 이유 (DB → 아카라이브 → 나무위키 fallback)
-│   │   ├── search.ts            # 나무위키 문서 검색
-│   │   ├── history.ts           # 과거 실검 (날짜별/키워드별)
-│   │   ├── velocity.ts          # 급상승 키워드 (증가율 계산)
-│   │   ├── related.ts           # 연관 키워드 (동시등장횟수)
-│   │   ├── trending-together.ts # 함께 뜨는 키워드 쌍
-│   │   └── trend-of-day.ts      # 오늘 종합 리포트
+│   │   ├── search.ts              # 🔍 나무위키 문서 검색 (핵심)
+│   │   ├── trending.ts            # 실검 TOP N
+│   │   ├── why.ts                 # 실검 이유 설명
+│   │   ├── history.ts             # 과거 이력
+│   │   ├── velocity.ts            # 급상승 감지
+│   │   ├── related.ts             # 연관 키워드
+│   │   ├── trending-together.ts   # 함께 뜨는 키워드
+│   │   └── trend-of-day.ts        # 종합 리포트
 │   ├── scrapers/
-│   │   ├── arca.ts        # 아카라이브 목록/상세 스크래핑 (per-element 숫자 추출)
-│   │   └── namuwiki.ts    # 나무위키 문서 fallback 파싱
+│   │   ├── namuwiki.ts    # 나무위키 문서 파싱
+│   │   └── arca.ts        # 아카라이브 실검채널 스크래핑
 │   └── db/
-│       ├── schema.ts      # sql.js 초기화 + snapshots/articles 테이블 DDL
-│       └── queries.ts     # DB CRUD 함수 (12개)
-├── data/                   # SQLite DB 저장소 (볼륨 마운트)
-├── Dockerfile              # Multi-stage, node:20-alpine, linux/amd64
+│       ├── schema.ts      # SQLite 초기화
+│       └── queries.ts     # DB CRUD 함수
+├── Dockerfile
 ├── package.json
-├── tsconfig.json
-└── README.md
+└── tsconfig.json
 ```
-
-## 데이터베이스
-
-### snapshots 테이블
-스크래핑할 때마다 저장되는 실검 순위 스냅샷.
-
-| 컬럼 | 타입 | 설명 |
-|:-----|:-----|:------|
-| id | INTEGER PK | AUTOINCREMENT |
-| captured_at | TEXT | 스크래핑 시각 |
-| rank | INTEGER | 순위 |
-| keyword | TEXT | 키워드명 |
-| category | TEXT | 카테고리 (스포츠/인방/정치/일반/TV/커뮤/기타) |
-| views | INTEGER | 조회수 |
-| likes | INTEGER | 좋아요 수 |
-| comments | INTEGER | 댓글 수 |
-| post_id | INTEGER | 아카라이브 게시글 ID |
-
-### articles 테이블
-아카라이브 게시글 본문 캐시.
-
-| 컬럼 | 타입 | 설명 |
-|:-----|:-----|:------|
-| post_id | INTEGER PK | 아카라이브 게시글 ID |
-| keyword | TEXT | 키워드명 |
-| category | TEXT | 카테고리 |
-| body | TEXT | 게시글 본문 (실검 이유) |
-| views/likes/comments | INTEGER | 통계 |
-| posted_at | TEXT | 아카라이브 작성일시 |
-| fetched_at | TEXT | 캐시 시각 |
-
-## 배포 체크리스트
-
-### 로컬 검증
-- [x] `npm run build` 에러 없음
-- [x] 로컬 서버 기동 확인
-- [x] `GET /healthz` → `{"status":"ok"}`
-- [x] `tools/list`에 8개 도구 정상 표시
-- [x] Docker build 성공
-
-### PlayMCP in KC 등록
-- [ ] https://playmcp.kakaocloud.io 접속
-- [ ] Git 소스 빌드로 서버 생성
-- [ ] Status: **Active** 확인
-- [ ] Endpoint URL 복사
-
-### PlayMCP 등록
-- [ ] https://playmcp.kakao.com → 개발자 콘솔
-- [ ] 새 MCP 서버 등록 → Endpoint URL 입력
-- [ ] **정보 불러오기** 성공 확인
-- [ ] **임시 등록** (심사 요청 금지)
-- [ ] 도구함에 추가 → AI 채팅으로 8개 도구 테스트
-- [ ] 심사 요청 → 승인 메일 확인
-- [ ] 공개 상태 → **전체 공개** 전환
 
 ## 라이선스
 
