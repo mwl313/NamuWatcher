@@ -4,12 +4,17 @@ import type { NamuWikiResult } from "../types.js";
 
 const WIKI_URL_BASE = "https://namu.wiki/w";
 const WIKI_HOME = "https://namu.wiki/";
+const GOOGLE_CACHE = "https://webcache.googleusercontent.com/search?q=cache:";
 
 /**
  * 나무위키 문서를 검색하여 첫 문단 요약을 추출합니다.
  * Vue.js SPA이므로 HTML 소스에서 모든 텍스트 노드를 수집합니다.
  * 요청 간격: 최소 300ms
- * IP 차단 시 쿠키 획득 후 재시도합니다.
+ *
+ * 접속 시도 순서:
+ * 1차: namu.wiki 직접 접속
+ * 2차: 쿠키 획득 후 재시도
+ * 3차: Google Cache 우회 시도
  */
 export async function scrapeWiki(keyword: string): Promise<NamuWikiResult | null> {
   await delay(300);
@@ -17,18 +22,39 @@ export async function scrapeWiki(keyword: string): Promise<NamuWikiResult | null
   const encodedKeyword = encodeURIComponent(keyword);
   const url = `${WIKI_URL_BASE}/${encodedKeyword}`;
 
-  // 1차 시도
+  // 1차 시도: namu.wiki 직접 접속
   let result = await tryFetchWiki(url, keyword);
   if (result) return result;
 
   // 2차 시도: 쿠키 획득 후 재시도
   await delay(500);
   const { cookie } = await fetchWithCookie(WIKI_HOME);
-  if (!cookie) return null;
+  if (cookie) {
+    await delay(300);
+    result = await tryFetchWiki(url, keyword, cookie);
+    if (result) return result;
+  }
 
+  // 3차 시도: Google Cache 우회
   await delay(300);
-  result = await tryFetchWiki(url, keyword, cookie);
+  result = await tryFetchFromGoogleCache(keyword, url);
   return result;
+}
+
+async function tryFetchFromGoogleCache(
+  keyword: string,
+  originalUrl: string
+): Promise<NamuWikiResult | null> {
+  const cacheUrl = `${GOOGLE_CACHE}${encodeURIComponent(originalUrl)}&strip=1`;
+  try {
+    const response = await fetchWithTimeout(cacheUrl, 15_000);
+    if (!response.ok) return null;
+    const html = await response.text();
+    if (!html) return null;
+    return parseWikiPage(html, keyword, originalUrl);
+  } catch {
+    return null;
+  }
 }
 
 async function tryFetchWiki(
