@@ -6,8 +6,28 @@ const LIST_URL = "https://arca.live/b/namuhotnow";
 const ARTICLE_URL_BASE = "https://arca.live/b/namuhotnow";
 
 /**
+ * 게시글이 공지글인지 확인합니다.
+ */
+function isNotice($: cheerio.CheerioAPI, linkEl: any, title: string): boolean {
+  // 1. 제목이 "공지"로 시작하면 제외
+  if (title.startsWith("공지")) return true;
+  // 2. 제목이 "Notice"로 시작하면 제외
+  if (title.startsWith("Notice")) return true;
+  // 3. 제목이 "["로 시작하면 제외 (괄호 시작 = 관리글)
+  if (title.startsWith("[")) return true;
+  // 4. 제목 길이가 80자 이상이면 제외 (공지글은 보통 김)
+  if (title.length >= 80) return true;
+  // 5. 부모 요소에 notice 클래스가 있으면 제외
+  const parentRow = $(linkEl).closest("tr, div.list-item, li, .table-row, [class*='row']").first();
+  if (parentRow.length > 0 && (parentRow.hasClass("notice") || parentRow.attr("class")?.includes("notice"))) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * 아카라이브 목록 페이지를 스크래핑하여 최신 게시글 N개를 반환합니다.
- * 각 게시글 엘리먼트 내에서만 조회수/좋아요/댓글을 추출합니다.
+ * 각 게시글 엘리먼트 내에서만 조회수/좋아요/댓글을 추출하며, 공지글은 제외합니다.
  */
 export async function scrapeList(count: number): Promise<ArcaListItem[]> {
   const html = await fetchPage(LIST_URL);
@@ -31,6 +51,9 @@ export async function scrapeList(count: number): Promise<ArcaListItem[]> {
 
     const title = $(linkEl).text().trim();
     if (!title || title.length === 0) return;
+
+    // 공지글 필터링
+    if (isNotice($, linkEl, title)) return;
 
     processedPostIds.add(postId);
 
@@ -105,7 +128,6 @@ export async function scrapeArticle(postId: number): Promise<ArcaArticle | null>
   const category = classifyCategory(title);
 
   // 상세 페이지의 stats 영역에서 조회수/좋아요/댓글 추출
-  // 상세 페이지에서는 게시글 본문이 아닌 사이드/상단 stats 영역의 숫자가 더 관련 있음
   const statSelectors = ".stats, .vote, .status, .info, [class*='stat'], [class*='vote'], [class*='info']";
   let statsText = "";
   $(statSelectors).each((_, el) => {
@@ -116,7 +138,6 @@ export async function scrapeArticle(postId: number): Promise<ArcaArticle | null>
   if (statsText.trim()) {
     numbers = extractNumbers(statsText);
   } else {
-    // fallback: 전체 body에서 숫자 추출
     numbers = extractNumbers($("body").text());
   }
 
