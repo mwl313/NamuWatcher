@@ -76,6 +76,7 @@ export async function why(args: { keyword: string }): Promise<WhyResponse> {
       posted_at: "",
       views: 0,
       likes: 0,
+      note: "이 키워드에 대한 실검 이유가 아직 등록되지 않았습니다. 나무위키 문서 내용을 대신 표시합니다.",
     };
   }
 

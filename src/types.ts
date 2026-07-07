@@ -55,6 +55,7 @@ export interface WhyResponse {
   posted_at: string;
   views: number;
   likes: number;
+  note?: string;
 }
 
 // ===== Search =====

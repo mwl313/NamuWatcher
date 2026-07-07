@@ -1,33 +1,28 @@
 import { z } from "zod";
-import { scrapeList } from "../scrapers/arca.js";
+import { fetchRanking } from "../scrapers/ranking.js";
 import { insertSnapshots } from "../db/queries.js";
 import { nowISO } from "../utils.js";
 import type { TrendingResponse, TrendingKeyword } from "../types.js";
 
 export const trendingSchema = {
-  count: z.number().optional().default(10).describe("조회할 실검 개수 (기본 10, 최대 20)"),
-  category: z.string().optional().describe("카테고리 필터 (스포츠/인방/정치/일반/TV/커뮤)"),
+  count: z.number().optional().default(10).describe("조회할 실검 개수 (기본 10, 최대 10)"),
+  category: z.string().optional().describe("카테고리 필터 (스포츠/인방/정치/일반/TV/커뮤) — API 기반에서는 미지원)"),
 };
 
 export async function trending(args: { count?: number; category?: string }): Promise<TrendingResponse> {
-  const count = Math.min(args.count ?? 10, 20);
-  const categoryFilter = args.category;
+  const count = Math.min(args.count ?? 10, 10);
 
-  const items = await scrapeList(count);
+  const items = await fetchRanking(count);
 
-  let keywords: TrendingKeyword[] = items.map((item, idx) => ({
-    rank: idx + 1,
+  let keywords: TrendingKeyword[] = items.map((item) => ({
+    rank: item.rank,
     keyword: item.keyword,
-    category: item.category,
-    views: item.views,
-    likes: item.likes,
-    comments: item.comments,
-    postId: item.postId,
+    category: args.category || "기타",
+    views: 0,
+    likes: 0,
+    comments: 0,
+    postId: 0,
   }));
-
-  if (categoryFilter) {
-    keywords = keywords.filter((k) => k.category === categoryFilter);
-  }
 
   const capturedAt = nowISO();
 
@@ -49,6 +44,6 @@ export async function trending(args: { count?: number; category?: string }): Pro
     captured_at: capturedAt,
     total: keywords.length,
     keywords,
-    source: "arca.live",
+    source: "search.namu.wiki",
   };
 }
